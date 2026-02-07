@@ -35,8 +35,8 @@
 
         function enviarCadastro() {
         const nome = document.getElementById('nome').value;
-        const id = document.getElementById('id_aluno').value;
-        const payload = JSON.stringify({ aluno: nome, id: id, acao: "CADASTRAR" });
+        const matricula = document.getElementById('matricula_aluno').value;
+        const payload = JSON.stringify({ aluno: nome, mat: matricula , acao: "CADASTRAR" });
         
         client.publish('universidade/cadastro', payload);
         alert("Comando enviado! Verifique o LCD da ESP32.");
