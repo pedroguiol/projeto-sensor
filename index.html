@@ -1,0 +1,46 @@
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Cadastro digital</title>
+    </head>
+    <body>
+        <h2>Cadastro de Alunos - Projeto Embarcados</h2>
+    <input type="text" id="nome" placeholder="Nome do Aluno">
+    <input type="number" id="id_aluno" placeholder="ID (1-100)">
+    <button onclick="enviarCadastro()">Enviar para ESP32</button>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+        // Configurações do seu HiveMQ Cloud
+        const options = {
+        connectTimeout: 4000,
+        clientId: 'web_client_' + Math.random().toString(16).substr(2, 8),
+        username: 'WEB',
+        password: 'ecJACUIPENSE1',
+        };
+
+
+        // O endereço WebSocket está no seu painel do HiveMQ
+        const client = mqtt.connect('wss://07d9a34421014e6598f8331685171c61.s1.eu.hivemq.cloud:8884/mqtt', options);
+
+         // 2. Verificar conexão
+        client.on('connect', () => {
+            console.log('Conectado com sucesso!');
+            // 3. Inscrever-se no tópico do ESP32
+            client.subscribe('esp32/data');
+        });
+
+
+        function enviarCadastro() {
+        const nome = document.getElementById('nome').value;
+        const id = document.getElementById('id_aluno').value;
+        const payload = JSON.stringify({ aluno: nome, id: id, acao: "CADASTRAR" });
+        
+        client.publish('universidade/cadastro', payload);
+        alert("Comando enviado! Verifique o LCD da ESP32.");
+        }
+    </script>
+    </body>
+    </html>
