@@ -264,17 +264,16 @@ void registrarPresenca(String nome, int matricula) {
 void dadosnaPlaca() {
     if (WiFi.status() == WL_CONNECTED && LittleFS.exists("/arquivo.txt")) {
 
-      Serial.println("Arquivo existe");
-      File file = LittleFS.open("/arquivo.txt", "r");
-      HTTPClient http;
-      // URL do seu Google Apps Script
-      http.begin("https://script.google.com/macros/s/AKfycbz...SUA_URL.../exec"); 
-      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-      String dados;
-
       if(!file || file.size() == 0) {
         Serial.println("Arquivo está vazio ou não pôde ser aberto");
       } else {
+        Serial.println("Arquivo existe");
+        File file = LittleFS.open("/arquivo.txt", "r");
+        HTTPClient http;
+        // URL do seu Google Apps Script
+        http.begin("https://script.google.com/macros/s/AKfycbz...SUA_URL.../exec"); 
+        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+        String dados;
         Serial.print("Tamanho do arquivo: ");
         Serial.println(file.size());
 
@@ -385,6 +384,7 @@ void loop() {
     Serial.println("Dedo encontrado");
     identificarAluno(p);
   }
+  dadosnaPlaca();
 
   client.loop(); // Mantém a conexão ativa processando o rádio Wi-Fi
 }
