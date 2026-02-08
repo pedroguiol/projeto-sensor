@@ -7,87 +7,207 @@
 #include <HTTPClient.h>
 #include <LITTLEFS.h>
 #include <Preferences.h>
-Preferences preferences;
+#include <vector> 
+#include <string>
 #include "rgb_lcd.h"
+
+using namespace std;
+
+Preferences preferences;
 
 #define SDA 21
 #define SCL 22
 #define PINO_RX_DO_ESP 16
 #define PINO_TX_DO_ESP 17
-rgb_lcd lcd;
 
+rgb_lcd lcd;
 
 HardwareSerial mySerial(2);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
 struct Aluno {
-  char nome[17];      // Nome (16 letras + 1 para o fim da String)
-  int matricula;      // A matrícula da universidade
-  int idSensor;       // O ID (1, 2, 3...) que o AS608 reconhece
+  char nome[20];      
+  int matricula;      
+  int idSensor;       
 };
-vector<Pessoa> lista; 
-lista[0].push_back("Nobody",0,0);
-// Configurações do Wi-Fi
+
+// Vetor global
+vector<Aluno> lista; 
+int idAtual = 1; // Variável global para controle
+
+// Configurações do Wi-Fi e MQTT
 const char* ssid = "NOBODY";
 const char* password = "100Pedro";
-
-// Detalhes do Broker HiveMQ
 const char* mqtt_broker = "07d9a34421014e6598f8331685171c61.s1.eu.hivemq.cloud";
 const int mqtt_port = 8883; 
 const char* mqtt_usernameE = "ESP32";
 const char* mqtt_passwordE = "ecJACUIPENSE1";
 
+// URL do Google Script
+const char* googleScriptURL = "https://script.google.com/macros/s/AKfycbz...SUA_URL.../exec";
+
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
+
+// --- FUNÇÕES DE PERSISTÊNCIA DO VETOR ---
+// Salva a lista inteira no LittleFS para não perder os nomes se acabar a energia
+void salvarBancoVector() {
+  File f = LittleFS.open("/banco_alunos.dat", "w");
+  if (f) {
+    for (const auto& aluno : lista) {
+      f.write((uint8_t*)&aluno, sizeof(Aluno));
+    }
+    f.close();
+    Serial.println("Banco de alunos atualizado na Flash!");
+  }
+}
+
+// Carrega a lista do LittleFS quando a placa liga
+void carregarBancoVector() {
+  File f = LittleFS.open("/banco_alunos.dat", "r");
+  if (f) {
+    lista.clear();
+    Aluno temp;
+    while (f.read((uint8_t*)&temp, sizeof(Aluno))) {
+      lista.push_back(temp);
+    }
+    f.close();
+    Serial.println("Banco de alunos carregado! Total: " + String(lista.size()));
+  }
+}
+// ----------------------------------------
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
 
-  mySerial.begin(57600, SERIAL_8N1, PINO_RX_DO_ESP, PINO_TX_DO_ESP); 
+  // Inicia LittleFS
+  if(!LittleFS.begin(true)){
+    Serial.println("Erro ao montar LittleFS");
+    return;
+  }
 
-  // Inicia o sensor usando a biblioteca Adafruit
+  carregarBancoVector();
+
+  // Recupera o último ID usado
+  preferences.begin("sistema", false);
+  idAtual = preferences.getInt("proximo_id", 1);
+  preferences.end();
+
+  mySerial.begin(57600, SERIAL_8N1, PINO_RX_DO_ESP, PINO_TX_DO_ESP); 
   finger.begin(57600);
 
-  if(finger.begin()) {
+  if(finger.verifyPassword()) {
     Serial.println("Sensor encontrado");
   } else {
     Serial.println("Sensor não encontrado");
   }
 
   Wire.begin(SDA, SCL);
-  lcd.begin(16, 2); // set up the LCD's number of columns and rows
+  lcd.begin(16, 2);
   lcd.setRGB(255, 255, 0);
-  lcd.setCursor(0, 0); // set the cursor to column 0, line 0
-  // 1. Conectar Wi-Fi
+
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
-
     lcd.clear();
-    lcd.print("Conectando na WI-FI");
+    lcd.print("Conectando Wi-Fi");
   }
-  lcd.clear(); // Apaga tudo na tela e volta o cursor para 0,0
-  lcd.setCursor(0, 0); // Define a coluna 0, linha 0 (ou 0,1 para a segunda linha)
+  
+  lcd.clear();
+  lcd.print("Wi-Fi OK!");
+  delay(1000);
 
-  Serial.println("\n[SUCESSO] Wi-Fi conectado!");
-  lcd.print("[SUCESSO] Wi-Fi conectado");
-  delay(2000);
-  // 2. Configurar Segurança (SSL/TLS) - Obrigatório para HiveMQ Cloud
-  espClient.setInsecure(); // Permite conectar sem validar o certificado raiz
-
-  // 3. Configurar MQTT
+  espClient.setInsecure();
   client.setServer(mqtt_broker, mqtt_port);
   client.setCallback(callback); 
 }
 
-// Esta função é chamada quando o site envia algo
+// Função auxiliar para enviar dados
+bool enviarParaGoogle(String nome, int matricula) {
+  HTTPClient http;
+  http.begin(googleScriptURL); 
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  
+  String dados = "matricula=" + String(matricula) + "&nome=" + nome;
+  int httpResponseCode = http.POST(dados);
+  http.end();
+
+  if (httpResponseCode > 0) {
+    Serial.println("Enviado: " + String(httpResponseCode));
+    return true;
+  }
+  Serial.println("Erro envio: " + String(httpResponseCode));
+  return false;
+}
+
+// Função para processar a fila offline
+void processarFilaOffline() {
+  // Só tenta se tiver Wi-Fi e se o arquivo existir
+  if (WiFi.status() == WL_CONNECTED && LittleFS.exists("/offline.txt")) {
+    Serial.println("Sincronizando dados offline...");
+    File file = LittleFS.open("/offline.txt", "r");
+    
+    // Vamos criar um arquivo temporário para salvar o que falhar (se houver)
+    // Mas para simplificar: lemos tudo, enviamos, se der erro paramos e apagamos o enviado.
+    // Estratégia simples: Ler linha a linha.
+    
+    // Nota: Ler e escrever no mesmo arquivo é complexo. 
+    // O ideal é ler para a RAM, enviar e depois limpar o arquivo.
+    
+    while(file.available()) {
+      String linha = file.readStringUntil('\n');
+      if (linha.length() > 5) { // Filtra linhas vazias
+        int commaIndex = linha.indexOf(',');
+        if (commaIndex != -1) {
+          String matriculaStr = linha.substring(0, commaIndex);
+          String nomeStr = linha.substring(commaIndex + 1);
+          
+          Serial.print("Sincronizando: "); Serial.println(nomeStr);
+          enviarParaGoogle(nomeStr, matriculaStr.toInt());
+          delay(500); // Pausa para não bloquear o Google
+        }
+      }
+    }
+    file.close();
+    
+    // Assume que enviou tudo e limpa o arquivo
+    LittleFS.remove("/offline.txt");
+    Serial.println("Sincronização concluída.");
+  }
+}
+
+// Função principal de registro
+void registrarPresenca(String nome, int matricula) {
+  bool enviado = false;
+
+  // 1. Tenta enviar Online
+  if (WiFi.status() == WL_CONNECTED) {
+    enviado = enviarParaGoogle(nome, matricula);
+  }
+
+  // 2. Se falhar (sem wifi ou erro no server), salva Offline
+  if (!enviado) {
+    Serial.println("Salvando offline...");
+    // AQUI É "a" (APPEND) E NÃO "w" (WRITE)
+    File f = LittleFS.open("/offline.txt", "a"); 
+    if (f) {
+      // Salva no formato: matricula,nome
+      f.printf("%d,%s\n", matricula, nome.c_str());
+      f.close();
+      lcd.setCursor(0, 1);
+      lcd.print("Salvo Offline   ");
+    } else {
+      Serial.println("Erro ao abrir arquivo offline");
+    }
+  } else {
+    lcd.setCursor(0, 1);
+    lcd.print("Registro Enviado");
+  }
+}
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("\nMensagem recebida no tópico: ");
-  Serial.println(topic);
-  
   String mensagem = "";
   for (int i = 0; i < length; i++) {
     mensagem += (char)payload[i];
@@ -98,293 +218,141 @@ void callback(char* topic, byte* payload, unsigned int length) {
     deserializeJson(doc, mensagem);
 
     String nomeCompleto = doc["aluno"] | "Aluno"; 
+    int matricula = doc["matricula"];
+    
+    // Tratamento do nome
     String primeiroNome;
-
-    // Procura a posição do primeiro espaço
     int indiceEspaco = nomeCompleto.indexOf(' ');
-
     if (indiceEspaco != -1) {
-        // Se achou um espaço, pega tudo que vem antes dele
-        primeiroNome = nomeCompleto.subString(0, indiceEspaco);
+       primeiroNome = nomeCompleto.substring(0, indiceEspaco); // CORREÇÃO: substring (minúsculo)
     } else {
-        // Se não tem espaço (nome único), usa o nome inteiro
-        primeiroNome = nomeCompleto;
+       primeiroNome = nomeCompleto;
     }
-
-    // Limite de segurança: se o primeiro nome sozinho ainda for maior que 16
-    if (primeiroNome.length() > 16) {
-        primeiroNome = primeiroNome.subString(0, 16);
-    }
+    if (primeiroNome.length() > 16) primeiroNome = primeiroNome.substring(0, 16);
 
     lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Sensor ativado, ");
-    lcd.print(primeiroNome);
-    
+    lcd.print("Cadastrar: ");
     lcd.setCursor(0, 1);
-    lcd.print("Matricula:");
-    lcd.print((int)doc["matricula"]);
-    int matricula = (int)doc["matricula"];  
+    lcd.print(primeiroNome);
     delay(1000);
-    int p;
-    do {
-      p = finger.getImage();
     
-      delay(50); // Delay curto para não travar o loop
-    } while (p != FINGERPRINT_OK);
-
-    p = finger.image2Tz(1);
-
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Coloque o dedo novamente");
-    delay(1000);
-    lcd.clear();
-
-    do {
-      p = finger.getImage();
+    int p = -1;
     
-      yield();
-    } while (p != FINGERPRINT_OK);
+    // Captura 1
+    lcd.clear(); lcd.print("Coloque o dedo");
+    while ((p = finger.getImage()) != FINGERPRINT_OK) { yield(); }
+    finger.image2Tz(1);
 
-    lcd.clear();
-    lcd.print("Tire o dedo...");
+    // Espera tirar
+    lcd.clear(); lcd.print("Tire o dedo");
     delay(1000);
-    while (finger.getImage() != FINGERPRINT_NOFINGER) { 
-      yield(); 
-    }
+    while (finger.getImage() != FINGERPRINT_NOFINGER) { yield(); }
 
-    lcd.clear();
-    lcd.print("Dedo novamente");
-    do {
-      p = finger.getImage();
-      yield();
-    } while (p != FINGERPRINT_OK);
+    // Captura 2
+    lcd.clear(); lcd.print("Dedo novamente");
+    while ((p = finger.getImage()) != FINGERPRINT_OK) { yield(); }
+    finger.image2Tz(2);
 
-    p = finger.image2Tz(2);
-    if (p != FINGERPRINT_OK) return;
-
-    p = finger.createModel();
-    if (p == FINGERPRINT_OK) {
-      Serial.println("Digitais combinam!");
-      
-      // Gerenciamento do ID persistente
-      preferences.begin("sistema", false); 
-      int idAtual = preferences.getInt("proximo_id", 1);
-      
+    if (finger.createModel() == FINGERPRINT_OK) {
+      // Usa o ID GLOBAL para salvar
       if (finger.storeModel(idAtual) == FINGERPRINT_OK) {
         lcd.clear();
-        lcd.print("Salvo no ID: ");
+        lcd.print("Salvo ID: ");
         lcd.print(idAtual);
-        lista.push_back({nomeCompleto,matricula,idAtual});
-        // Salva o próximo ID na Flash
-        idAtual++;
-        preferences.putInt("proximo_id", idAtual);
         
-        // Aqui você envia pro banco de dados
-        registrarPresenca(matricula, primeiroNome); 
+        // 1. Adiciona ao vetor na RAM
+        Aluno novoAluno;
+        strncpy(novoAluno.nome, primeiroNome.c_str(), 19);
+        novoAluno.matricula = matricula;
+        novoAluno.idSensor = idAtual;
+        lista.push_back(novoAluno);
+        
+        // 2. Atualiza o arquivo de backup do vetor
+        salvarBancoVector();
+
+        // 3. Atualiza o ID para o próximo
+        idAtual++;
+        preferences.begin("sistema", false);
+        preferences.putInt("proximo_id", idAtual);
+        preferences.end();
+        
+        // 4. Registra a presença do cadastro
+        registrarPresenca(primeiroNome, matricula); 
       }
-      preferences.end(); // FECHA O PREFERENCES
-      
     } else {
+      lcd.clear(); lcd.print("Erro Digital");
+    }
+  }
+}
+
+void identificarAluno(int idEncontrado) {
+
+  bool encontrado = false;
+  for (const auto& aluno : lista) {
+    if (aluno.idSensor == idEncontrado) {
       lcd.clear();
-      lcd.print("Nao combinam!");
+      lcd.print("Oi, ");
+      lcd.print(aluno.nome);
+      
+      registrarPresenca(String(aluno.nome), aluno.matricula);
+      encontrado = true;
+      break;
     }
   }
-    
-}
-
-
-// Atualizamos a função para receber o ID E o Nome
-void registrarPresenca(String nome, int matricula) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    // URL do seu Google Apps Script
-    http.begin("https://script.google.com/macros/s/AKfycbz...SUA_URL.../exec"); 
-    http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    String dados;
-    
-    if(LittleFS.exists("/arquivo.txt")) {
-      Serial.println("Arquivo existe");
-      File file = LittleFS.open("/arquivo.txt", "r");
-
-      if(!file || file.size() == 0) {
-        Serial.println("Arquivo está vazio ou não pôde ser aberto");
-      } else {
-        Serial.print("Tamanho do arquivo: ");
-        Serial.println(file.size());
-
-        while(file.size() != 0) {
-          string linha = file.readString();
-          int32_t tamanho = linha.size();
-          int8_t i = 0;
-          String nomeArq;
-          String matricula;
-          while(linha[i] != ',') {
-            nomeArq += linha[i];
-          }
-
-          while(linha[i] != '\n') {
-            matricula += linha[i];
-          }
-          dados = "matricula=" + matricula + "&nome=" + nome;
-          Serial.println("Enviando para o Google Sheets...");
-          int httpResponseCode = http.POST(dados);
-          
-          if (httpResponseCode > 0) {
-            Serial.println("Resposta do servidor: " + String(httpResponseCode));
-          } else {
-            Serial.println("Erro no envio POST");
-          }
-          http.end();
-        }
-      }
-      file.close();
-
-    } else {
-      Serial.println("Arquivo não encontrado");
-    }
-
-
-    // Agora 'nome' é a variável que recebemos no parâmetro
-    dados = "matricula=" + String(matricula) + "&nome=" + nome;
-    
-    Serial.println("Enviando para o Google Sheets...");
-    int httpResponseCode = http.POST(dados);
-    
-    if (httpResponseCode > 0) {
-      Serial.println("Resposta do servidor: " + String(httpResponseCode));
-    } else {
-      Serial.println("Erro no envio POST");
-    }
-    http.end();
+  
+  if (!encontrado) {
+    lcd.clear();
+    lcd.print("ID "); lcd.print(idEncontrado);
+    lcd.setCursor(0,1);
+    lcd.print("Nao cadastrado");
   }
+  delay(2000);
+  lcd.clear();
 }
 
-void dadosnaPlaca() {
-    if (WiFi.status() == WL_CONNECTED && LittleFS.exists("/arquivo.txt")) {
-
-      if(!file || file.size() == 0) {
-        Serial.println("Arquivo está vazio ou não pôde ser aberto");
-      } else {
-        Serial.println("Arquivo existe");
-        File file = LittleFS.open("/arquivo.txt", "r");
-        HTTPClient http;
-        // URL do seu Google Apps Script
-        http.begin("https://script.google.com/macros/s/AKfycbz...SUA_URL.../exec"); 
-        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-        String dados;
-        Serial.print("Tamanho do arquivo: ");
-        Serial.println(file.size());
-
-        while(file.size() != 0) {
-          string linha = file.readString();
-          int32_t tamanho = linha.size();
-          int8_t i = 0;
-          String nomeArq;
-          String matricula;
-          while(linha[i] != ',') {
-            nomeArq += linha[i];
-          }
-
-          while(linha[i] != '\n') {
-            matricula += linha[i];
-          }
-
-          dados = "matricula=" + matricula + "&nome=" + nome;
-          Serial.println("Enviando para o Google Sheets...");
-          int httpResponseCode = http.POST(dados);
-          
-          if (httpResponseCode > 0) {
-            Serial.println("Resposta do servidor: " + String(httpResponseCode));
-          } else {
-            Serial.println("Erro no envio POST");
-          }
-          http.end();
-        }
-      }
-    file.close;
-  }
-}
-
-void reconnect() {
-  while (!client.connected()) {
-    Serial.print("Tentando conexão MQTT...");
-    // CONSERTO: O ID do cliente deve ser único para não desconectar o site
-    if (client.connect("ESP32_Placa_Fisica", mqtt_usernameE, mqtt_passwordE)) {
-      Serial.println("Conectado!");
-      // CONSERTO: Inscrito no tópico exato que o seu site publica
-      client.subscribe("universidade/cadastro"); 
-    } else {
-      Serial.print("Falha, rc=");
-      Serial.print(client.state());
-      delay(2000);
-    }
-  }
-}
-
-void identificarAluno(int8_t p) {
-
-  if(p > idAtual) {   // Colocar o idAtual como variável global
-    Serial.println("Id inválido");
-    return;
-  } else {
-    String aluno = lista[p].nome;
-    int matricula = lista[p].matricula;
-
-    lcd.cursor(0,0);
-    lcd.print("Olá, ");
-    lcd.print(aluno);
-   
-    if(WiFi.status() != WL_CONNECTED) {
-    
-      if(!LittleFS.begin(true)){ 
-        Serial.println("Erro ao montar"); 
-      }
-
-      File file = LittleFS.open("/arquivo.txt", "w");
-      file.println(lista[p].nome,lista[p].matricula);
-      file.close();
-
-    } else {
-      registrarPresenca(aluno,matricula);
-    }
-    
-  }
-
-}
-
-int8_t getFingerprintID() {
+int getFingerprintID() {
   uint8_t p = finger.getImage();
-  if (p != FINGERPRINT_OK) return -1; // Sem dedo ou erro
+  if (p != FINGERPRINT_OK) return -1;
 
   p = finger.image2Tz();
-  if (p != FINGERPRINT_OK) return -1; // Erro de conversão
+  if (p != FINGERPRINT_OK) return -1;
 
   p = finger.fingerFastSearch();
   if (p == FINGERPRINT_OK) {
-    Serial.print("Digital encontrada! ID #");
-    Serial.print(finger.fingerID); // Retorna o ID
-    Serial.print(" Confiança: ");
-    Serial.println(finger.confidence); // Nível de confiança
     return finger.fingerID;
   }
-  return -1; // Nenhuma correspondência
+  return -1;
 }
 
+void reconnect() {
+  if (!client.connected()) {
+    // Tenta reconectar (non-blocking se possível, mas aqui usamos while simples)
+    if (client.connect("ESP32_Biometria", mqtt_usernameE, mqtt_passwordE)) {
+      Serial.println("MQTT Conectado");
+      client.subscribe("universidade/cadastro"); 
+    }
+  }
+}
+
+// Timer para não rodar a sincronização toda hora
+unsigned long ultimoSync = 0;
 
 void loop() {
+  // 1. Mantém MQTT
   if (!client.connected()) {
     reconnect();
   }
+  client.loop();
 
-  int p = getFingerprintID();
-
-  if(p != -1) {
-    Serial.println("Dedo encontrado");
-    identificarAluno(p);
+  // 2. Verifica Sensor Biométrico
+  int id = getFingerprintID();
+  if (id != -1) {
+    identificarAluno(id);
   }
-  dadosnaPlaca();
 
-  client.loop(); // Mantém a conexão ativa processando o rádio Wi-Fi
+  // 3. Processa dados Offline a cada 30 segundos (para não travar o sensor)
+  if (millis() - ultimoSync > 30000) {
+    processarFilaOffline();
+    ultimoSync = millis();
+  }
 }
