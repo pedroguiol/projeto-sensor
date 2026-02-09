@@ -5,7 +5,8 @@
 #include <Adafruit_Fingerprint.h>
 #include <Wire.h>
 #include <HTTPClient.h>
-#include <LITTLEFS.h>
+#include <FS.h>       // Inclua esta primeiro (Sistema de Arquivos Genérico)
+#include <LittleFS.h> // Note que apenas o L, F e S são maiúsculos
 #include <Preferences.h>
 #include <vector> 
 #include <string>
@@ -113,16 +114,20 @@ void setup() {
     Serial.print(".");
     lcd.clear();
     lcd.print("Conectando Wi-Fi");
+    Serial.println("Conectando Wi-Fi");
   }
   
   lcd.clear();
   lcd.print("Wi-Fi OK!");
+  Serial.println("Wi-Fi OK!");
   delay(1000);
 
   espClient.setInsecure();
   client.setServer(mqtt_broker, mqtt_port);
   client.setCallback(callback); 
 }
+
+
 
 // Função auxiliar para enviar dados
 bool enviarParaGoogle(String nome, int matricula) {
@@ -198,16 +203,18 @@ void registrarPresenca(String nome, int matricula) {
       f.close();
       lcd.setCursor(0, 1);
       lcd.print("Salvo Offline   ");
+      Serial.println("Salvo offline ");
     } else {
       Serial.println("Erro ao abrir arquivo offline");
     }
   } else {
     lcd.setCursor(0, 1);
     lcd.print("Registro Enviado");
+    Serial.println("Registro Enviado");
   }
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, uint8_t* payload, unsigned int length) {
   String mensagem = "";
   for (int i = 0; i < length; i++) {
     mensagem += (char)payload[i];
@@ -230,10 +237,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
     if (primeiroNome.length() > 16) primeiroNome = primeiroNome.substring(0, 16);
 
+
     lcd.clear();
     lcd.print("Cadastrar: ");
     lcd.setCursor(0, 1);
     lcd.print(primeiroNome);
+    Serial.print("Cadastrar: ");
+    Serial.println(primeiroNome);
     delay(1000);
     
     int p = -1;
@@ -259,6 +269,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
         lcd.clear();
         lcd.print("Salvo ID: ");
         lcd.print(idAtual);
+        Serial.print("Salvo ID: ");
+        Serial.println(idAtual);
         
         // 1. Adiciona ao vetor na RAM
         Aluno novoAluno;
@@ -281,6 +293,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       }
     } else {
       lcd.clear(); lcd.print("Erro Digital");
+      Serial.println("Erro Digital");
     }
   }
 }
@@ -288,23 +301,29 @@ void callback(char* topic, byte* payload, unsigned int length) {
 void identificarAluno(int idEncontrado) {
 
   bool encontrado = false;
+  Serial.println(encontrado);
   for (const auto& aluno : lista) {
     if (aluno.idSensor == idEncontrado) {
       lcd.clear();
       lcd.print("Oi, ");
       lcd.print(aluno.nome);
+      Serial.print("oi, ");
+      Serial.println(aluno.nome);
       
       registrarPresenca(String(aluno.nome), aluno.matricula);
       encontrado = true;
       break;
-    }
+    } 
   }
   
   if (!encontrado) {
+    Serial.println("Chegou aqui");
     lcd.clear();
     lcd.print("ID "); lcd.print(idEncontrado);
     lcd.setCursor(0,1);
-    lcd.print("Nao cadastrado");
+    lcd.println("Nao cadastrado");
+    Serial.print("Id: ");
+    Serial.println("Nao cadastrado");
   }
   delay(2000);
   lcd.clear();
@@ -321,6 +340,8 @@ int getFingerprintID() {
   if (p == FINGERPRINT_OK) {
     return finger.fingerID;
   }
+
+  if (p == FINGERPRINT_NOTFOUND) return -2;
   return -1;
 }
 
@@ -334,7 +355,6 @@ void reconnect() {
   }
 }
 
-// Timer para não rodar a sincronização toda hora
 unsigned long ultimoSync = 0;
 
 void loop() {
@@ -343,16 +363,33 @@ void loop() {
     reconnect();
   }
   client.loop();
-
   // 2. Verifica Sensor Biométrico
   int id = getFingerprintID();
-  if (id != -1) {
+  Serial.println(id);
+  if (id != -1 && id != -2) {
+    Serial.println("Id diferente de -1");
     identificarAluno(id);
+  } 
+
+  if(id == -2){
+    lcd.clear();
+    lcd.setCursor(0,1);
+    lcd.println("Nao cadastrado");
+    Serial.print("ID: ");
+    Serial.println("Nao cadastrado!");
+    delay(2000);
+    lcd.clear();
+
+    while (finger.getImage() != FINGERPRINT_NOFINGER) {
+      client.loop(); // Mantém o MQTT vivo enquanto espera tirar o dedo
+      yield();
+    }
+  
   }
 
   // 3. Processa dados Offline a cada 30 segundos (para não travar o sensor)
   if (millis() - ultimoSync > 30000) {
     processarFilaOffline();
     ultimoSync = millis();
-  }
+  } 
 }
