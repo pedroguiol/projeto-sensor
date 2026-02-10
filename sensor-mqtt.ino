@@ -37,7 +37,7 @@ vector<Aluno> lista;
 int idAtual = 1; // Variável global para controle
 
 // Configurações do Wi-Fi e MQTT
-const char* ssid = "NOBODY";
+const char* ssid = "AndroidAp";
 const char* password = "100Pedro";
 const char* mqtt_broker = "07d9a34421014e6598f8331685171c61.s1.eu.hivemq.cloud";
 const int mqtt_port = 8883; 
@@ -82,6 +82,11 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
 
+  IPAddress dns(8, 8, 8, 8); 
+  WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, dns);
+  // Configura DNS fixo do Google para tentar furar o bloqueio
+  //IPAddress dns(8, 8, 8, 8); 
+  //WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, dns);
   // Inicia LittleFS
   if(!LittleFS.begin(true)){
     Serial.println("Erro ao montar LittleFS");
@@ -124,7 +129,14 @@ void setup() {
 
   espClient.setInsecure();
   client.setServer(mqtt_broker, mqtt_port);
-  client.setCallback(callback); 
+  // --- O SEGREDO ESTÁ AQUI ---
+  // Aumenta o tempo limite de espera para 30 segundos (o padrão é 15)
+  client.setSocketTimeout(30); 
+  // Mantém a conexão viva por mais tempo sem cair
+  client.setKeepAlive(60); 
+  // Aumenta o tamanho do buffer para não engasgar com JSON grande
+  client.setBufferSize(512);
+  client.setCallback(callback);   
 }
 
 
@@ -215,86 +227,108 @@ void registrarPresenca(String nome, int matricula) {
 }
 
 void callback(char* topic, uint8_t* payload, unsigned int length) {
+  Serial.print("Chegou mensagem no topico: ");
+  Serial.println(topic);
+
   String mensagem = "";
   for (int i = 0; i < length; i++) {
     mensagem += (char)payload[i];
   }
+  
+  Serial.print("Conteudo: ");
+  Serial.println(mensagem);
 
-  if (String(topic) == "universidade/cadastro") {
+  // Removendo espaços extras do tópico para garantir a comparação
+  String topicoStr = String(topic);
+  topicoStr.trim(); 
+
+  if (topicoStr == "universidade/cadastro") {
+    Serial.println("Topico CORRETO! Processando JSON...");
+    
     StaticJsonDocument<256> doc;
-    deserializeJson(doc, mensagem);
+    DeserializationError error = deserializeJson(doc, mensagem);
+
+    if (error) {
+      Serial.print("Erro no JSON: ");
+      Serial.println(error.c_str());
+      return;
+    }
 
     String nomeCompleto = doc["aluno"] | "Aluno"; 
     int matricula = doc["matricula"];
     
+    Serial.print("Nome extraido: "); Serial.println(nomeCompleto);
+
     // Tratamento do nome
     String primeiroNome;
     int indiceEspaco = nomeCompleto.indexOf(' ');
     if (indiceEspaco != -1) {
-       primeiroNome = nomeCompleto.substring(0, indiceEspaco); // CORREÇÃO: substring (minúsculo)
+       primeiroNome = nomeCompleto.substring(0, indiceEspaco);
     } else {
        primeiroNome = nomeCompleto;
     }
     if (primeiroNome.length() > 16) primeiroNome = primeiroNome.substring(0, 16);
 
-
     lcd.clear();
     lcd.print("Cadastrar: ");
     lcd.setCursor(0, 1);
     lcd.print(primeiroNome);
-    Serial.print("Cadastrar: ");
-    Serial.println(primeiroNome);
-    delay(1000);
     
+    // --- ROTINA DE CADASTRO ---
     int p = -1;
     
-    // Captura 1
+    Serial.println("Aguardando dedo 1...");
     lcd.clear(); lcd.print("Coloque o dedo");
-    while ((p = finger.getImage()) != FINGERPRINT_OK) { yield(); }
+    while ((p = finger.getImage()) != FINGERPRINT_OK) { 
+        client.loop(); // Mantém conexao viva
+        yield(); 
+    }
     finger.image2Tz(1);
+    Serial.println("Dedo 1 capturado");
 
-    // Espera tirar
     lcd.clear(); lcd.print("Tire o dedo");
     delay(1000);
     while (finger.getImage() != FINGERPRINT_NOFINGER) { yield(); }
 
-    // Captura 2
+    Serial.println("Aguardando dedo 2...");
     lcd.clear(); lcd.print("Dedo novamente");
-    while ((p = finger.getImage()) != FINGERPRINT_OK) { yield(); }
+    while ((p = finger.getImage()) != FINGERPRINT_OK) { 
+        client.loop(); 
+        yield(); 
+    }
     finger.image2Tz(2);
+    Serial.println("Dedo 2 capturado");
 
     if (finger.createModel() == FINGERPRINT_OK) {
-      // Usa o ID GLOBAL para salvar
       if (finger.storeModel(idAtual) == FINGERPRINT_OK) {
         lcd.clear();
-        lcd.print("Salvo ID: ");
-        lcd.print(idAtual);
-        Serial.print("Salvo ID: ");
-        Serial.println(idAtual);
+        lcd.print("Salvo ID: "); lcd.print(idAtual);
+        Serial.println("Sucesso! ID salvo: " + String(idAtual));
         
-        // 1. Adiciona ao vetor na RAM
+        // Adiciona ao vetor
         Aluno novoAluno;
         strncpy(novoAluno.nome, primeiroNome.c_str(), 19);
         novoAluno.matricula = matricula;
         novoAluno.idSensor = idAtual;
         lista.push_back(novoAluno);
         
-        // 2. Atualiza o arquivo de backup do vetor
         salvarBancoVector();
 
-        // 3. Atualiza o ID para o próximo
         idAtual++;
         preferences.begin("sistema", false);
         preferences.putInt("proximo_id", idAtual);
         preferences.end();
         
-        // 4. Registra a presença do cadastro
         registrarPresenca(primeiroNome, matricula); 
       }
     } else {
       lcd.clear(); lcd.print("Erro Digital");
-      Serial.println("Erro Digital");
+      Serial.println("Erro ao criar modelo biométrico");
     }
+    delay(2000);
+    lcd.clear();
+  } else {
+      Serial.println("Ignorado: Topico incorreto.");
   }
 }
 
@@ -346,15 +380,26 @@ int getFingerprintID() {
 }
 
 void reconnect() {
-  if (!client.connected()) {
-    // Tenta reconectar (non-blocking se possível, mas aqui usamos while simples)
-    if (client.connect("ESP32_Biometria", mqtt_usernameE, mqtt_passwordE)) {
-      Serial.println("MQTT Conectado");
-      client.subscribe("universidade/cadastro"); 
+  // Loop até reconectar
+  while (!client.connected()) {
+    Serial.print("Tentando conexao MQTT... ");
+    // Cria um ID de cliente aleatório
+    String clientId = "ESP32Client-";
+    clientId += String(random(0xffff), HEX);
+    
+    if (client.connect(clientId.c_str(), mqtt_usernameE, mqtt_passwordE)) {
+      Serial.println("Conectado!");
+      // Inscreve de novo para garantir
+      client.subscribe("universidade/cadastro");
+      Serial.println("Inscrito no topico: universidade/cadastro");
+    } else {
+      Serial.print("falhou, rc=");
+      Serial.print(client.state());
+      Serial.println(" tentando de novo em 5s");
+      delay(5000);
     }
   }
 }
-
 unsigned long ultimoSync = 0;
 
 void loop() {
@@ -365,7 +410,6 @@ void loop() {
   client.loop();
   // 2. Verifica Sensor Biométrico
   int id = getFingerprintID();
-  Serial.println(id);
   if (id != -1 && id != -2) {
     Serial.println("Id diferente de -1");
     identificarAluno(id);

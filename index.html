@@ -1,46 +1,77 @@
-    <!DOCTYPE html>
-    <html lang="pt-br">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Cadastro digital</title>
-    </head>
-    <body>
-        <h2>Cadastro de Alunos - Projeto Embarcados</h2>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro Biométrico</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .status { margin-top: 10px; font-weight: bold; color: red; }
+    </style>
+</head>
+<body>
+    <h2>Cadastro de Alunos - ESP32</h2>
+    
     <input type="text" id="nome" placeholder="Nome do Aluno">
-    <input type="number" id="id_aluno" placeholder="ID (1-100)">
+    <input type="number" id="matricula" placeholder="Matrícula (Números)">
     <button onclick="enviarCadastro()">Enviar para ESP32</button>
+    
+    <div id="status" class="status">Desconectado...</div>
 
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script>
-        // Configurações do seu HiveMQ Cloud
+        const statusDiv = document.getElementById('status');
+
+        // Configurações
         const options = {
-        connectTimeout: 4000,
-        clientId: 'web_client_' + Math.random().toString(16).substr(2, 8),
-        username: 'WEB',
-        password: 'ecJACUIPENSE1',
+            clean: true,
+            connectTimeout: 4000,
+            clientId: 'web_' + Math.random().toString(16).substr(2, 8),
+            // ATENÇÃO: Se não criou o usuário "WEB" no HiveMQ, use o "ESP32" aqui também
+            username: 'ESP32', 
+            password: 'ecJACUIPENSE1', 
         };
 
+        // Conexão via WebSocket (WSS) na porta 8884
+        const brokerUrl = 'wss://07d9a34421014e6598f8331685171c61.s1.eu.hivemq.cloud:8884/mqtt';
+        
+        console.log("Tentando conectar...");
+        const client = mqtt.connect(brokerUrl, options);
 
-        // O endereço WebSocket está no seu painel do HiveMQ
-        const client = mqtt.connect('wss://07d9a34421014e6598f8331685171c61.s1.eu.hivemq.cloud:8884/mqtt', options);
-
-         // 2. Verificar conexão
         client.on('connect', () => {
-            console.log('Conectado com sucesso!');
-            // 3. Inscrever-se no tópico do ESP32
-            client.subscribe('esp32/data');
+            console.log('Site Conectado ao HiveMQ!');
+            statusDiv.innerText = "Conectado ao Broker!";
+            statusDiv.style.color = "green";
         });
 
+        client.on('error', (err) => {
+            console.error('Erro:', err);
+            statusDiv.innerText = "Erro de conexão (Verifique Console)";
+        });
 
         function enviarCadastro() {
-        const nome = document.getElementById('nome').value;
-        const matricula = document.getElementById('matricula_aluno').value;
-        const payload = JSON.stringify({ aluno: nome, mat: matricula , acao: "CADASTRAR" });
-        
-        client.publish('universidade/cadastro', payload);
-        alert("Comando enviado! Verifique o LCD da ESP32.");
+            // CORREÇÃO 2: Pegando os IDs corretos do HTML
+            const nome = document.getElementById('nome').value;
+            const matricula = document.getElementById('matricula').value;
+
+            if(!nome || !matricula) {
+                alert("Preencha nome e matrícula!");
+                return;
+            }
+
+            // Cria o JSON igual ao que o ESP32 espera
+            // O ESP32 espera: {"aluno": "Nome", "matricula": 123}
+            const payload = JSON.stringify({ 
+                aluno: nome, 
+                matricula: parseInt(matricula) // Garante que é número
+            });
+            
+            // Publica no tópico que o ESP32 está escutando
+            client.publish('universidade/cadastro', payload);
+            
+            console.log("Enviado:", payload);
+            alert("Comando enviado! Olhe o LCD do ESP32.");
         }
     </script>
-    </body>
-    </html>
+</body>
+</html>
