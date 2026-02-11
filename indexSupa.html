@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro Biométrico - Supabase</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; }
+        input { padding: 10px; margin: 5px; width: 200px; }
+        button { padding: 10px 20px; background-color: #3ECF8E; color: white; border: none; cursor: pointer; font-size: 16px; border-radius: 5px;}
+        button:hover { background-color: #34b27b; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h2>Cadastro de Alunos - Via Supabase</h2>
+    
+    <input type="text" id="nome" placeholder="Nome do Aluno">
+    <input type="number" id="matricula" placeholder="Matrícula">
+    <br><br>
+    <button onclick="enviarCadastro()">Enviar para ESP32</button>
+
+    <script>
+        // --- CONFIGURAÇÃO DO SUPABASE ---
+        // Pegue esses dados em: Project Settings -> API
+        const supabaseUrl = 'https://owblnxwberjozqyeyims.supabase.co'; // URL do projeto
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93YmxueHdiZXJqb3pxeWV5aW1zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMzQzMDksImV4cCI6MjA4NTYxMDMwOX0.V8TCiSaeCqI7VlBKkO4j0j51kxfy-OLw4NhETRQze6Q'; //  anon public
+        
+        // Inicializa o cliente
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        // A função precisa ser ASYNC para usar o await
+        async function enviarCadastro() {
+            const nome = document.getElementById('nome').value;
+            const matricula = document.getElementById('matricula').value;
+
+            if(!nome || !matricula) {
+                alert("Preencha nome e matrícula!");
+                return;
+            }
+
+            // Envia para a tabela 'fila_espera' (Sugiro criar com esse nome)
+            // É importante ter uma coluna 'status' como 'pendente' para o ESP32 saber que é novo
+            const { data, error } = await supabase
+                .from('fila_espera') 
+                .insert([
+                    { 
+                        nome: nome, 
+                        matricula: matricula,
+                        status: 'pendente' 
+                    }
+                ]);
+
+            if (error) {
+                console.error('Erro ao inserir:', error);
+                alert('Erro: ' + error.message);
+            } else {
+                console.log('Sucesso:', data);
+                alert('Comando enviado para a nuvem! O ESP32 vai ler em breve.');
+                
+                // Limpa os campos
+                document.getElementById('nome').value = '';
+                document.getElementById('matricula').value = '';
+            }
+        }
+    </script>
+</body>
+</html>
