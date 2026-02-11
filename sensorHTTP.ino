@@ -4,7 +4,7 @@
 #include <Wire.h>
 #include <vector>
 #include <string>
-#include <Preferences.h> // CORREÇÃO 1: Adicionei o #include que faltava
+#include <Preferences.h> 
 #include "FS.h"
 #include "LittleFS.h"
 #include "rgb_lcd.h"
