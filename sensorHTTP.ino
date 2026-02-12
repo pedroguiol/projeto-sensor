@@ -13,8 +13,8 @@
 using namespace std;
 
 // Configurações do Wi-Fi
-const char* ssid = "brisa-4277360";     
-const char* password = "u502at18"; 
+const char* ssid = "...";     
+const char* password = "..."; 
 
 #define SDA 21
 #define SCL 22
