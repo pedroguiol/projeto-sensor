@@ -9,6 +9,7 @@
 #include "LittleFS.h"
 #include "rgb_lcd.h"
 #include "site.h"
+#include <HTTPClient.h>
 
 using namespace std;
 
@@ -56,9 +57,9 @@ void carregarBancoVector() {
   File f = LittleFS.open("/banco_alunos.dat", "r");
   if (f) {
     lista.clear();
-    Aluno temp;
-    while (f.read((uint8_t*)&temp, sizeof(Aluno))) {
-      lista.push_back(temp);
+    Aluno aluno;
+    while (f.read((uint8_t*)&aluno, sizeof(Aluno))) {
+      lista.push_back(aluno);
     }
     f.close();
     Serial.println("Banco carregado! Total: " + String(lista.size()));
@@ -111,7 +112,7 @@ void handleCadastro() {
   // Loop 1 - Espera o dedo
   while((p = finger.getImage()) != FINGERPRINT_OK) { 
       // Serial.println("Aguardando..."); 
-      delay(10); // CORREÇÃO 3: Delay vital para não travar
+      delay(10); 
   }
   
   finger.image2Tz(1);
@@ -188,13 +189,14 @@ void setup() {
   mySerial.begin(57600, SERIAL_8N1, 16, 17); 
   finger.begin(57600);
   
-  if (finger.emptyDatabase() == FINGERPRINT_OK) {
+ /*  if (finger.emptyDatabase() == FINGERPRINT_OK) {
     apagarBancoVector();
     Serial.println("Todas as digitais foram apagadas!");
 
   } else {
     Serial.println("Erro ao apagar ou sensor vazio.");
-  }
+  } */
+
   if (finger.verifyPassword()) {
     Serial.println("Sensor de Digital encontrado!");
   } else {
@@ -253,8 +255,119 @@ int getFingerprintID() {
   return -1;
 }
 
+void registrarPresenca(int id) {
+  enviarPresencaGoogle(id);
+}
+
+
+void registrarPresencaBanco(Aluno aluno) {
+
+  HTTPClient http;
+
+  String url = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
+  String dados = "?acao=presenca&id=" + String(getIdByMatricula(aluno.matricula));
+
+  http.begin(url + dados);
+  int httpCode = http.GET();
+
+  if (httpCode > 0) {
+    Serial.println("Presença offline enviada!");
+  } else {
+    Serial.println("Erro ao enviar offline");
+  }
+
+  http.end();
+}
+
+
+void registrarOffline(int id) {
+  File f = LittleFS.open("/registro_offline.dat", "a");
+  Aluno aluno;
+  strcpy(aluno.nome, lista[id-1].nome); 
+  aluno.matricula = lista[id-1].matricula;
+  if(f) {
+    f.write((uint8_t*)&aluno, sizeof(Aluno));
+    f.close();
+    Serial.println("Aluno registrado no banco offline");
+  }
+}
+
+void enviarBancoOffline() {
+  File f = LittleFS.open("/registro-offline.dat","r");
+  Aluno aluno;  // Criando variável temporária
+
+  if(f) {
+
+    while(f.read((uint8_t*)&aluno, sizeof(Aluno))) {
+      registrarPresencaBanco(aluno); // Enviar o registro que está no banco para o google Sheet
+    }
+    if(f.size() == 0) {
+      LittleFS.remove("/registro-offline.dat"); // Apagando arquivo se tudo foi enviado da maneira certa
+      Serial.println("Todos os alunos foram registrados");
+    } else {
+      Serial.println("Erro ao registrar todos os alunos");
+    }
+  } else {
+    Serial.println("Registros do banco offline vazio");
+  }
+}
+
+int getIdByMatricula(int matricula) {
+  for (int i = 0; i < lista.size(); i++) {
+    if (lista[i].matricula == matricula) {
+      return i + 1;  // ID começa em 1
+    }
+  }
+  return -1;
+}
+
+void enviarCadastroGoogle(String nome, int matricula, int id) {
+  HTTPClient http;
+
+  String url = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
+ 
+  String dados = "?acao=cadastro";
+  dados += "&id=" + String(id);
+  dados += "&nome=" + nome;
+  dados += "&matricula=" + String(matricula);
+
+  http.begin(url + dados);
+  int httpCode = http.GET();
+
+  if (httpCode > 0) {
+    Serial.println("Cadastro enviado ao Google!");
+  } else {
+    Serial.println("Erro ao enviar cadastro");
+  }
+
+  http.end();
+}
+
+void enviarPresencaGoogle(int id) {
+  HTTPClient http;
+
+  String url = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
+  String dados = "?acao=presenca&id=" + String(id);
+
+  http.begin(url + dados);
+  int httpCode = http.GET();
+
+  if (httpCode > 0) {
+    Serial.println("Presença registrada!");
+  }
+
+  http.end();
+}
+
+
+unsigned long tempoAnterior = 0;  
+unsigned long intervalo = 3000;
+
+
+
 void loop() {
   server.handleClient();
+  unsigned long tempoAtual = millis();
 
   int id = getFingerprintID();
 
@@ -265,11 +378,29 @@ void loop() {
     }
   } else if(id != -1 && id != -2){
     Serial.println("ID encontrado");
+
+    if(WiFi.status() != WL_CONNECTED) {
+      registrarOffline(id); // Se não tiver internet o aluno é adicionado no banco offine
+    } else {  
+      registrarPresenca(id);
+  // Se tiver internet envia direto para o google sheet
+    }
+
     String nome;
-    //strcpy(nome,lista.nome[id-1])
     Serial.println("Nome: ");
     Serial.println(lista[id-1].nome );
     Serial.println("Matrícula: ");
     Serial.println(lista[id-1].matricula);
   }
+
+  if((tempoAtual - tempoAnterior) >= intervalo) { // Checando a cada três segundos se tem aluno pra ser registrado online
+    tempoAnterior = tempoAtual;
+
+    File f = LittleFS.open("/registro-offline.dat","r");
+    if(WiFi.status() == WL_CONNECTED &&  f) {
+      enviarBancoOffline();
+    }
+    
+  }
+
 }
