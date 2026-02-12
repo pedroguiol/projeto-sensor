@@ -255,7 +255,7 @@ int getFingerprintID() {
 }
 
 void registrarPresenca(Aluno aluno) {
-
+  // Enviar para o google sheet
 }
 
 void registrarOffline(int id) {
