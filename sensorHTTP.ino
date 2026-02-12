@@ -4,7 +4,7 @@
 #include <Wire.h>
 #include <vector>
 #include <string>
-#include <Preferences.h> 
+#include <Preferences.h>
 #include "FS.h"
 #include "LittleFS.h"
 #include "rgb_lcd.h"
@@ -65,6 +65,22 @@ void carregarBancoVector() {
   }
 }
 
+void apagarBancoVector() {
+  if(LittleFS.remove("/banco_alunos.dat")) {
+    Serial.println("Arquivo apagado com sucesso!");
+    lista.clear();
+    Serial.println(String(lista.size()));
+  } else {
+    Serial.println("Falha ao apagar ou arquivo não existia.");
+      
+  }
+
+  preferences.begin("sistema", false);
+  preferences.putInt("proximo_id", 1);
+  idAtual = 1;
+  preferences.end();
+
+}
 // --- CADASTRO ---
 void handleCadastro() {
   String nome = server.arg("nome");
@@ -164,14 +180,6 @@ void setup() {
     Serial.println("Erro ao montar o LittleFS");
     return;
   }
- 
-   if (finger.emptyDatabase() == FINGERPRINT_OK) {
-    Serial.println("Todas as digitais foram apagadas!");
-  } else {
-    Serial.println("Erro ao apagar ou sensor vazio.");
-  }
-
-
   
   Wire.begin(SDA, SCL);
   lcd.begin(16, 2);
@@ -180,27 +188,34 @@ void setup() {
   mySerial.begin(57600, SERIAL_8N1, 16, 17); 
   finger.begin(57600);
   
+  if (finger.emptyDatabase() == FINGERPRINT_OK) {
+    apagarBancoVector();
+    Serial.println("Todas as digitais foram apagadas!");
+
+  } else {
+    Serial.println("Erro ao apagar ou sensor vazio.");
+  }
   if (finger.verifyPassword()) {
     Serial.println("Sensor de Digital encontrado!");
   } else {
     Serial.println("Sensor de Digital NAO encontrado :(");
   }
 
-  // CORREÇÃO 2: Aqui também tem que ser "sistema" para ele achar o valor salvo
+  
   preferences.begin("sistema", false);
-  idAtual = preferences.getInt("proximo_id", 1); // Padrão é 2 se for a primeira vez
+  idAtual = preferences.getInt("proximo_id", 1); 
   preferences.end();
   Serial.println("Sistema iniciado. Proximo ID a usar: " + String(idAtual));
+  
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
     lcd.clear();
     lcd.print("Conectando Wi-Fi");
   }
-  Serial.println("");
+  Serial.println("Wi-Fi OK");
   Serial.println(WiFi.localIP()); 
   
   carregarBancoVector();
