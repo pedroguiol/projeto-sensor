@@ -60,6 +60,9 @@ void carregarBancoVector() {
     Aluno aluno;
     while (f.read((uint8_t*)&aluno, sizeof(Aluno))) {
       lista.push_back(aluno);
+    Aluno aluno;
+    while (f.read((uint8_t*)&aluno, sizeof(Aluno))) {
+      lista.push_back(aluno);
     }
     f.close();
     Serial.println("Banco carregado! Total: " + String(lista.size()));
@@ -112,6 +115,7 @@ void handleCadastro() {
   // Loop 1 - Espera o dedo
   while((p = finger.getImage()) != FINGERPRINT_OK) { 
       // Serial.println("Aguardando..."); 
+      delay(10); 
       delay(10); 
   }
   
@@ -190,11 +194,14 @@ void setup() {
   finger.begin(57600);
   
  /*  if (finger.emptyDatabase() == FINGERPRINT_OK) {
+ /*  if (finger.emptyDatabase() == FINGERPRINT_OK) {
     apagarBancoVector();
     Serial.println("Todas as digitais foram apagadas!");
 
   } else {
     Serial.println("Erro ao apagar ou sensor vazio.");
+  } */
+
   } */
 
   if (finger.verifyPassword()) {
@@ -365,8 +372,51 @@ unsigned long intervalo = 3000;
 
 
 
+void registrarPresencaBanco(Aluno aluno) {
+  // Enviar para o google sheet dos alunos que estão no banco de dados offline
+}
+
+void registrarPresenca() {
+  // Enviar para o google sheet quando tiver wi-fi
+}
+
+void registrarOffline(int id) {
+  File f = LittleFS.open("/registro_offline.dat", "a");
+  Aluno aluno;
+  strcpy(aluno.nome, lista[id-1].nome); 
+  aluno.matricula = lista[id-1].matricula;
+  if(f) {
+    f.write((uint8_t*)&aluno, sizeof(Aluno));
+    f.close();
+    Serial.println("Aluno registrado no banco offline");
+  }
+}
+
+void enviarBancoOffline() {
+  File f = LittleFS.open("/registro-offline.dat","r");
+  Aluno aluno;  // Criando variável temporária
+
+  if(f) {
+
+    while(f.read((uint8_t*)&aluno, sizeof(Aluno))) {
+      registrarPresencaBanco(aluno); // Enviar o registro que está no banco para o google Sheet
+    }
+    if(f.size() == 0) {
+      LittleFS.remove("/registro-offline.dat"); // Apagando arquivo se tudo foi enviado da maneira certa
+      Serial.println("Todos os alunos foram registrados");
+    } else {
+      Serial.println("Erro ao registrar todos os alunos");
+    }
+  } else {
+    Serial.println("Registros do banco offline vazio");
+  }
+}
+
+unsigned long tempoAnterior = 0;  
+unsigned long intervalo = 3000;
 void loop() {
   server.handleClient();
+  unsigned long tempoAtual = millis();
   unsigned long tempoAtual = millis();
 
   int id = getFingerprintID();
@@ -386,12 +436,30 @@ void loop() {
   // Se tiver internet envia direto para o google sheet
     }
 
+
+    if(WiFi.status() != WL_CONNECTED) {
+      registrarOffline(id); // Se não tiver internet o aluno é adicionado no banco offine
+    } else {  
+      registrarPresenca();  // Se tiver internet envia direto para o google sheet
+    }
+
     String nome;
     Serial.println("Nome: ");
     Serial.println(lista[id-1].nome );
     Serial.println("Matrícula: ");
     Serial.println(lista[id-1].matricula);
   }
+
+  if((tempoAtual - tempoAnterior) >= intervalo) { // Checando a cada três segundos se tem aluno pra ser registrado online
+    tempoAnterior = tempoAtual;
+
+    File f = LittleFS.open("/registro-offline.dat","r");
+    if(WiFi.status() == WL_CONNECTED &&  f) {
+      enviarBancoOffline();
+    }
+    
+  }
+
 
   if((tempoAtual - tempoAnterior) >= intervalo) { // Checando a cada três segundos se tem aluno pra ser registrado online
     tempoAnterior = tempoAtual;
