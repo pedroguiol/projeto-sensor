@@ -323,7 +323,7 @@ void loop() {
     tempoAnterior = tempoAtual;
 
     File file = littleFs.open("/registro-offline.dat","r");
-    if(WiFi.status() != WL_CONNECTED && file) {
+    if(WiFi.status() == WL_CONNECTED && file) {
       enviarBancoOffline();
     }
     
