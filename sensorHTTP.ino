@@ -102,61 +102,30 @@ int getIdByMatricula(int matricula) {
 // ==========================================
 
 void enviarCadastroGoogle(String nome, int matricula, int id) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Wi-Fi nao conectado, cadastro ignorado!");
-    return;
-  }
+  if (WiFi.status() != WL_CONNECTED) return;
 
   WiFiClientSecure client;
   client.setInsecure(); // aceita certificado HTTPS
 
   HTTPClient http;
 
-  // Constrói URL com parâmetros corretamente
   String url = googleScriptURL + "?acao=cadastro";
   url += "&id=" + String(id);
-  url += "&nome=" + urlencode(nome);
+  url += "&nome=" + nome;
   url += "&matricula=" + String(matricula);
 
-  int tentativas = 0;
-  int httpCode = -1;
+  url.replace(" ", "%20");
 
-  while (tentativas < 3 && httpCode <= 0) {
-    http.begin(client, url);  
-    httpCode = http.GET();
+  http.begin(client, url);  // 👈 MUDANÇA AQUI
+  int httpCode = http.GET();
 
-    if (httpCode > 0) {
-      Serial.println("Cadastro enviado ao Google! Code: " + String(httpCode));
-    } else {
-      Serial.println("Erro ao enviar cadastro, tentativa " + String(tentativas+1) +
-                     ": " + http.errorToString(httpCode));
-      delay(1000); // espera 1s antes de tentar de novo
-    }
-
-    http.end();
-    tentativas++;
+  if (httpCode > 0) {
+    Serial.println("Cadastro enviado ao Google! Code: " + String(httpCode));
+  } else {
+    Serial.println("Erro ao enviar cadastro: " + http.errorToString(httpCode));
   }
 
-  if (httpCode <= 0) {
-    Serial.println("Falha total ao enviar cadastro apos 3 tentativas.");
-  }
-}
-
-// Função para codificar URL corretamente (UTF-8)
-String urlencode(const String &str) {
-  String encoded = "";
-  char c;
-  char bufHex[4];
-  for (unsigned int i = 0; i < str.length(); i++) {
-    c = str[i];
-    if (isalnum(c)) {
-      encoded += c;
-    } else {
-      sprintf(bufHex, "%%%02X", c);
-      encoded += bufHex;
-    }
-  }
-  return encoded;
+  http.end();
 }
 
 void enviarPresencaGoogle(int id) {
@@ -349,7 +318,7 @@ void setup() {
     lcd.clear(); lcd.print("Conectando Wi-Fi");
   
   }
-
+  
   delay(2000);
   Serial.println("Wi-Fi OK");
   Serial.println(WiFi.localIP()); 
