@@ -1,3 +1,4 @@
+const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -163,9 +164,11 @@ button:hover {
     <h2>Cadastrar Novo Aluno</h2>
 
     <div style="display:flex; gap:10px; flex-wrap:wrap;" class="formCadas"> 
-        <input type="text" id="nome" placeholder="Nome do aluno" />
-        <input type="text" id="matricula" placeholder="Matrícula" />
-        <button onclick="cadastrarAluno()">Cadastrar</button>
+        <form action="/cadastrar" method="POST">
+            <input type="text" id="nome" name="nome" placeholder="Nome do aluno" />
+            <input type="text" id="matricula" name="matricula" placeholder="Matrícula" />
+            <button onclick="cadastrarAluno()">Cadastrar</button>
+        </form>
     </div>
 
     <p id="mensagemCadastro" style="margin-top:10px; color:green;"></p>
@@ -210,8 +213,7 @@ button:hover {
 </div>
 
 <script>
-const URL = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec?acao=listar";
-
+const URL = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
 
 async function cadastrarAluno() {
     const nome = document.getElementById("nome").value;
@@ -286,8 +288,9 @@ async function carregarDados() {
 }
 
 carregarDados();
-setInterval(carregarDados, 6000);
+setInterval(carregarDados, 60000);
 </script>
 
 </body>
 </html>
+)rawliteral";
