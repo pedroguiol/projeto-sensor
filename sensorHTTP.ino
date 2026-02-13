@@ -88,6 +88,41 @@ void apagarBancoVector() {
   Serial.println("Sistema resetado para ID 1");
 }
 
+void apagarBancoGoogle() {
+  if(WiFi.status() != WL_CONNECTED) {
+    Serial.println("Wi-Fi não conectado. Não foi possível apagar a planilha.");
+    return;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure(); // ignora certificado HTTPS
+
+  HTTPClient http;
+  
+  http.begin(client, googleScriptURL);  // URL base do Script
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+  String postData = "acao=apagar";  // enviamos uma ação "apagar"
+
+  int httpCode = http.POST(postData);
+
+  if(httpCode > 0){
+    String resposta = http.getString();
+    Serial.println("Planilha apagada! Código: " + String(httpCode));
+    Serial.println("Resposta: " + resposta);
+  } else {
+    Serial.println("Erro ao apagar planilha: " + http.errorToString(httpCode));
+  }
+
+  http.end();
+}
+
+void apagarTudo() {
+  apagarBancoVector();   // apaga LittleFS e zera IDs
+  apagarBancoGoogle();   // apaga planilha no Google
+}
+
+
 int getIdByMatricula(int matricula) {
   for (int i = 0; i < lista.size(); i++) {
     if (lista[i].matricula == matricula) {
