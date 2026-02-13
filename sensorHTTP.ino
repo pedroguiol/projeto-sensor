@@ -242,6 +242,8 @@ void handleCadastro() {
 
       // 2. Envia para o Google (Cadastro)
     
+      enviarCadastroGoogle(nome, matricula.toInt(), idAtual);
+
 
       // 3. Atualiza ID
       idAtual++;
