@@ -10,6 +10,8 @@
 #include "rgb_lcd.h"
 #include "site.h"
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
 
 using namespace std;
 
@@ -100,18 +102,21 @@ int getIdByMatricula(int matricula) {
 // ==========================================
 
 void enviarCadastroGoogle(String nome, int matricula, int id) {
-  if(WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  WiFiClientSecure client;
+  client.setInsecure(); // aceita certificado HTTPS
 
   HTTPClient http;
+
   String url = googleScriptURL + "?acao=cadastro";
   url += "&id=" + String(id);
   url += "&nome=" + nome;
   url += "&matricula=" + String(matricula);
 
-  // Espaço no nome pode quebrar a URL, ideal seria codificar, mas vamos tentar assim
-  url.replace(" ", "%20"); 
+  url.replace(" ", "%20");
 
-  http.begin(url);
+  http.begin(client, url);  // 👈 MUDANÇA AQUI
   int httpCode = http.GET();
 
   if (httpCode > 0) {
@@ -119,6 +124,7 @@ void enviarCadastroGoogle(String nome, int matricula, int id) {
   } else {
     Serial.println("Erro ao enviar cadastro: " + http.errorToString(httpCode));
   }
+
   http.end();
 }
 
