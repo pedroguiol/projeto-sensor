@@ -18,15 +18,13 @@
 <h1>Sistema de Presença Inteligente</h1>
 </header>
 
-<section class="card" id="formCadastro">
-<h2>Cadastrar Novo Aluno</h2>
+<form class="card" id="formCadastro">
+    <input type="text" id="nome" name="nome" placeholder="Nome do aluno" />
+    <input type="text" id="matricula" name="matricula" placeholder="Matrícula" />
+    <button type="submit">Cadastrar</button>
+</form>
+<p id="mensagemCadastro" style="margin-top:10px; color:green;"></p>
 
-<input type="text" id="nome" placeholder="Nome do aluno">
-<input type="text" id="matricula" placeholder="Matrícula">
-<button onclick="cadastrarAluno()">Cadastrar</button>
-
-<p id="mensagemCadastro"></p>
-</section>
 
 <div class="dashboard-grid">
 
@@ -63,37 +61,6 @@
 <script>
 const URL = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
 
-async function cadastrarAluno() {
-    const nome = document.getElementById("nome").value.trim();
-    const matricula = document.getElementById("matricula").value.trim();
-    const msg = document.getElementById("mensagemCadastro");
-
-    if (!nome || !matricula) {
-        msg.style.color = "red";
-        msg.textContent = "Preencha todos os campos!";
-        return;
-    }
-
-    const url = `${URL}?acao=cadastro&nome=${encodeURIComponent(nome)}&matricula=${encodeURIComponent(matricula)}`;
-
-    try {
-        const res = await fetch(url);
-        const idGerado = await res.text();
-
-        msg.style.color = "green";
-        msg.textContent = `Aluno cadastrado! ID: ${idGerado}`;
-
-        document.getElementById("nome").value = "";
-        document.getElementById("matricula").value = "";
-
-        carregarDados();
-
-    } catch (err) {
-        msg.style.color = "red";
-        msg.textContent = "Erro ao cadastrar.";
-        console.error(err);
-    }
-}
 
 async function carregarDados() {
     try {
@@ -128,19 +95,47 @@ async function carregarDados() {
     }
 }
 
-document.getElementById("formCadastro").addEventListener("submit", async e => {
-  e.preventDefault();
+async function cadastrarAluno(event) {
+    event.preventDefault(); // Evita que o form faça reload da página
 
-  const formData = new FormData(e.target);
-  formData.append("acao", "cadastro");
+    const nome = document.getElementById("nome").value;
+    const matricula = document.getElementById("matricula").value;
+    const mensagem = document.getElementById("mensagemCadastro");
 
-  await fetch(URL, {
-    method: "POST",
-    body: formData
-  });
+    if (!nome || !matricula) {
+        mensagem.style.color = "red";
+        mensagem.textContent = "Preencha todos os campos!";
+        return;
+    }
 
-  alert("Cadastro enviado para ESP");
-});
+    // Cria objeto com dados
+    const formData = new URLSearchParams();
+    formData.append("nome", nome);
+    formData.append("matricula", matricula);
+
+    try {
+        const response = await fetch("/cadastrar", {
+            method: "POST",
+            body: formData
+        });
+
+        const texto = await response.text();
+        mensagem.style.color = "green";
+        mensagem.textContent = "Olhe para o sensor!";
+
+        // limpa campos
+        document.getElementById("nome").value = "";
+        document.getElementById("matricula").value = "";
+
+    } catch (erro) {
+        mensagem.style.color = "red";
+        mensagem.textContent = "Erro ao enviar para o ESP!";
+        console.error(erro);
+    }
+}
+
+// Linka a função ao form
+document.querySelector("form").addEventListener("submit", cadastrarAluno);
 
 carregarDados();
 setInterval(carregarDados, 60000);
