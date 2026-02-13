@@ -1,260 +1,104 @@
-const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Presença</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Presença</title>
 
-    <!-- Fonte Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 
-    <style>
-        :root {
-            --primary-color: #4f46e5;
-            --secondary-color: #10b981;
-            --bg-body: #f3f4f6;
-            --bg-card: #ffffff;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
-            --border-color: #e5e7eb;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            line-height: 1.6;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 20px;
-        }
-
-        h1 {
-            font-size: 2rem;
-            color: var(--primary-color);
-            font-weight: 800;
-            letter-spacing: 1px;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-        }
-
-        .card {
-            background: var(--bg-card);
-            border-radius: 25px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 24px;
-            border: 3px solid var(--border-color);
-            margin-bottom: .8em;
-        }
-
-        h2 {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--bg-body);
-            color: var(--text-main);
-        }
-
-        .table-container {
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th {
-            background-color: #f9fafb;
-            padding: 12px 15px;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            font-weight: 800;
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        td {
-            padding: 14px 15px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        tr:hover {
-            background-color: #f8fafc;
-        }
-
-        .badge-presenca {
-            display: inline-block;
-            background-color: #ecfdf5;
-            color: var(--secondary-color);
-            font-weight: bold;
-            padding: 6px 12px; /* corrigido */
-            border-radius: 20px;
-            font-size: 0.95rem;
-            border: 2px solid #d1fae5;
-        }
-
-        .aluno-id {
-            font-family: monospace;
-            color: var(--text-muted);
-            font-weight: bold;
-        }
-
-        input {
-    padding: 20px;
-    border-radius: 10px;
-    border: 2px solid var(--border-color);
-    font-size: 1rem;
-    width: 100%;
-}
-
-button {
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 20px 16px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: bolder;
-    font-size: large;
-    width: 100%;
-}
-
-
-button:hover {
-    opacity: 0.9;
-}
-
-
-        @media (max-width: 850px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+<style>
+:root { --primary-color: #4f46e5; --secondary-color: #10b981; --bg-body: #f3f4f6; --bg-card: #ffffff; --text-main: #1f2937; --text-muted: #6b7280; --border-color: #e5e7eb; } * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Inter', -apple-system, sans-serif; background-color: var(--bg-body); color: var(--text-main); line-height: 1.6; padding: 20px; } .container { max-width: 1100px; margin: 0 auto; } header { text-align: center; margin-bottom: 40px; padding: 20px; } h1 { font-size: 2rem; color: var(--primary-color); font-weight: 800; letter-spacing: 1px; } .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; } .card { background: var(--bg-card); border-radius: 25px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); padding: 24px; border: 3px solid var(--border-color); margin-bottom: .8em; } h2 { font-size: 1.5rem; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid var(--bg-body); color: var(--text-main); } .table-container { overflow-x: auto; } table { width: 100%; border-collapse: collapse; } th { background-color: #f9fafb; padding: 12px 15px; font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); font-weight: 800; border-bottom: 2px solid var(--border-color); } td { padding: 14px 15px; border-bottom: 1px solid var(--border-color); } tr:hover { background-color: #f8fafc; } .badge-presenca { display: inline-block; background-color: #ecfdf5; color: var(--secondary-color); font-weight: bold; padding: 6px 12px; /* corrigido */ border-radius: 20px; font-size: 0.95rem; border: 2px solid #d1fae5; } .aluno-id { font-family: monospace; color: var(--text-muted); font-weight: bold; } input { padding: 20px; border-radius: 10px; border: 2px solid var(--border-color); font-size: 1rem; width: 100%; } button { background: var(--primary-color); color: white; border: none; padding: 20px 16px; border-radius: 10px; cursor: pointer; font-weight: bolder; font-size: large; width: 100%; } button:hover { opacity: 0.9; } @media (max-width: 850px) { .dashboard-grid { grid-template-columns: 1fr; } }
+</style>
 </head>
 
 <body>
 <div class="container">
-    <header>
-        <h1>Sistema de Presença Inteligente</h1>
-    </header>
+<header>
+<h1>Sistema de Presença Inteligente</h1>
+</header>
 
-    <section class="card" id="formCadastro">
-    <h2>Cadastrar Novo Aluno</h2>
+<section class="card">
+<h2>Cadastrar Novo Aluno</h2>
 
-    <div style="display:flex; gap:10px; flex-wrap:wrap;" class="formCadas"> 
-        <form action="/cadastrar" method="POST">
-            <input type="text" id="nome" name="nome" placeholder="Nome do aluno" />
-            <input type="text" id="matricula" name="matricula" placeholder="Matrícula" />
-            <button onclick="cadastrarAluno()">Cadastrar</button>
-        </form>
-    </div>
+<input type="text" id="nome" placeholder="Nome do aluno">
+<input type="text" id="matricula" placeholder="Matrícula">
+<button onclick="cadastrarAluno()">Cadastrar</button>
 
-    <p id="mensagemCadastro" style="margin-top:10px; color:green;"></p>
+<p id="mensagemCadastro"></p>
 </section>
 
-    <div class="dashboard-grid">
+<div class="dashboard-grid">
 
-        <!-- Cadastro -->
-        <section class="card">
-            <h2>Alunos Cadastrados</h2>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Matrícula</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaCadastro"></tbody>
-                </table>
-            </div>
-        </section>
+<section class="card">
+<h2>Alunos Cadastrados</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Nome</th>
+<th>Matrícula</th>
+</tr>
+</thead>
+<tbody id="tabelaCadastro"></tbody>
+</table>
+</section>
 
-        <!-- Presenças -->
-        <section class="card">
-            <h2>Ranking de Presenças</h2>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Nome do Aluno</th>
-                            <th>Total de Presenças</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaPresenca"></tbody>
-                </table>
-            </div>
-        </section>
+<section class="card">
+<h2>Ranking de Presenças</h2>
+<table>
+<thead>
+<tr>
+<th>Nome</th>
+<th>Presenças</th>
+</tr>
+</thead>
+<tbody id="tabelaPresenca"></tbody>
+</table>
+</section>
 
-    </div>
+</div>
 </div>
 
 <script>
 const URL = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
 
 async function cadastrarAluno() {
-    const nome = document.getElementById("nome").value;
-    const matricula = document.getElementById("matricula").value;
-    const mensagem = document.getElementById("mensagemCadastro");
+    const nome = document.getElementById("nome").value.trim();
+    const matricula = document.getElementById("matricula").value.trim();
+    const msg = document.getElementById("mensagemCadastro");
 
     if (!nome || !matricula) {
-        mensagem.style.color = "red";
-        mensagem.textContent = "Preencha todos os campos!";
+        msg.style.color = "red";
+        msg.textContent = "Preencha todos os campos!";
         return;
     }
 
-    const id = Date.now(); // gera ID único
-
-    const url = `https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec?acao=cadastro&id=${id}&nome=${encodeURIComponent(nome)}&matricula=${encodeURIComponent(matricula)}`;
+    const url = `${URL}?acao=cadastro&nome=${encodeURIComponent(nome)}&matricula=${encodeURIComponent(matricula)}`;
 
     try {
-        const response = await fetch(url);
-        const texto = await response.text();
+        const res = await fetch(url);
+        const idGerado = await res.text();
 
-        mensagem.style.color = "green";
-        mensagem.textContent = "Aluno cadastrado com sucesso!";
+        msg.style.color = "green";
+        msg.textContent = `Aluno cadastrado! ID: ${idGerado}`;
 
-        // limpa campos
         document.getElementById("nome").value = "";
         document.getElementById("matricula").value = "";
 
-        // atualiza tabelas
         carregarDados();
 
-    } catch (erro) {
-        mensagem.style.color = "red";
-        mensagem.textContent = "Erro ao cadastrar.";
-        console.error(erro);
+    } catch (err) {
+        msg.style.color = "red";
+        msg.textContent = "Erro ao cadastrar.";
+        console.error(err);
     }
 }
 
 async function carregarDados() {
     try {
-        const response = await fetch(URL);
-        const data = await response.json();
+        const res = await fetch(`${URL}?acao=listar`);
+        const data = await res.json();
 
         const tabelaCadastro = document.getElementById("tabelaCadastro");
         const tabelaPresenca = document.getElementById("tabelaPresenca");
@@ -263,34 +107,29 @@ async function carregarDados() {
         tabelaPresenca.innerHTML = "";
 
         data.forEach(aluno => {
-
-            // Cadastro
-            const linhaCadastro = document.createElement("tr");
-            linhaCadastro.innerHTML = `
-                <td class="aluno-id">#${aluno.id}</td>
-                <td>${aluno.nome}</td>
-                <td style="color: #6366f1;">${aluno.matricula}</td>
+            tabelaCadastro.innerHTML += `
+                <tr>
+                    <td>#${aluno.id}</td>
+                    <td>${aluno.nome}</td>
+                    <td>${aluno.matricula}</td>
+                </tr>
             `;
-            tabelaCadastro.appendChild(linhaCadastro);
 
-            // Presenças
-            const linhaPresenca = document.createElement("tr");
-            linhaPresenca.innerHTML = `
-                <td>${aluno.nome}</td>
-                <td><span class="badge-presenca">${aluno.presencas} sessões</span></td>
+            tabelaPresenca.innerHTML += `
+                <tr>
+                    <td>${aluno.nome}</td>
+                    <td>${aluno.presencas}</td>
+                </tr>
             `;
-            tabelaPresenca.appendChild(linhaPresenca);
         });
 
-    } catch (error) {
-        console.error("Erro ao carregar dados:", error);
+    } catch (erro) {
+        console.error("Erro ao carregar:", erro);
     }
 }
 
 carregarDados();
 setInterval(carregarDados, 60000);
 </script>
-
 </body>
 </html>
-)rawliteral";
