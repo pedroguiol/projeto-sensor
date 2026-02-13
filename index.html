@@ -18,7 +18,7 @@
 <h1>Sistema de Presença Inteligente</h1>
 </header>
 
-<section class="card">
+<section class="card" id="formCadastro">
 <h2>Cadastrar Novo Aluno</h2>
 
 <input type="text" id="nome" placeholder="Nome do aluno">
@@ -127,6 +127,20 @@ async function carregarDados() {
         console.error("Erro ao carregar:", erro);
     }
 }
+
+document.getElementById("formCadastro").addEventListener("submit", async e => {
+  e.preventDefault();
+
+  const formData = new FormData(e.target);
+  formData.append("acao", "cadastro");
+
+  await fetch(URL, {
+    method: "POST",
+    body: formData
+  });
+
+  alert("Cadastro enviado para ESP");
+});
 
 carregarDados();
 setInterval(carregarDados, 60000);
