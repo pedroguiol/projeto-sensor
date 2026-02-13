@@ -210,7 +210,8 @@ button:hover {
 </div>
 
 <script>
-const URL = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec";
+const URL = "https://script.google.com/macros/s/AKfycbxmB83yvBEI1IZteZOsjc6PiDAnDBOf8QeyuoACO5qaEZON1Uag6hcQ3FSwZmseK9sSYw/exec?acao=listar";
+
 
 async function cadastrarAluno() {
     const nome = document.getElementById("nome").value;
@@ -285,7 +286,7 @@ async function carregarDados() {
 }
 
 carregarDados();
-setInterval(carregarDados, 60000);
+setInterval(carregarDados, 6000);
 </script>
 
 </body>
